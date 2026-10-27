@@ -1,6 +1,6 @@
 /* Offline cache for Elbow Rehab. Bump VERSION on every release. */
-var VERSION = 'elbow-rehab-v1.0.0';
-var SHELL = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './icons/icon-192.png', './icons/apple-touch-icon.png'];
+var VERSION = 'elbow-rehab-v1.0.1';
+var SHELL = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './icon-192.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(VERSION).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); }));
