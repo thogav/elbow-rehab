@@ -121,7 +121,8 @@
       warn: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
       download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
       cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M12 14v4"/><path d="M10 16h4"/>',
-      sound: '<path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/>'
+      sound: '<path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/>',
+      plus: '<path d="M12 5v14"/><path d="M5 12h14"/>'
     }[name];
     return '<svg class="icon" aria-hidden="true" viewBox="0 0 24 24">' + p + '</svg>';
   }
@@ -758,8 +759,10 @@
   // ---------- Log ----------
   function viewLog() {
     var ss = sortedSessions();
-    var html = '<div class="header"><h1>Log</h1>' + (ss.length ? '<button class="pill-btn" data-action="export-csv">' + icon('download') + 'Export CSV</button>' : '') + '</div>';
-    if (!ss.length) return html + '<div class="card empty">No sessions yet.</div>';
+    var html = '<div class="header"><h1>Log</h1><div style="display:flex;gap:8px">' +
+      '<button class="pill-btn" data-action="add-session">' + icon('plus') + 'Add</button>' +
+      (ss.length ? '<button class="pill-btn" data-action="export-csv" aria-label="Export CSV">' + icon('download') + 'CSV</button>' : '') + '</div></div>';
+    if (!ss.length) return html + '<div class="card empty">No sessions yet. Tap Add to log a session you have already done.</div>';
     var total = 0, sets = 0, reps = 0;
     ss.forEach(function (s) { total += sessionVolume(s); sets += s.reps.length; reps += s.reps.reduce(function (a, b) { return a + b; }, 0); });
     html += '<div class="card trio" style="display:grid">' +
@@ -815,7 +818,7 @@
     html += '<div class="card"><span class="eyebrow">Backup</span><span class="small muted" style="font-size:13px">Your data is stored only on this phone. Export a backup now and then, for example to Files or iCloud Drive.</span>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="btn small secondary" data-action="export-json">Export</button>' +
       '<label class="btn small secondary" for="import-file" style="cursor:pointer">Import</label><input id="import-file" type="file" accept="application/json,.json" class="sr-only"></div></div>';
-    html += '<p class="small muted" style="text-align:center">Elbow Rehab · v1.0</p>';
+    html += '<p class="small muted" style="text-align:center">Elbow Rehab · v1.1</p>';
     return html;
   }
 
@@ -824,21 +827,32 @@
     var old = document.getElementById('sheet');
     if (old) old.remove();
     if (!ui.sheet) return;
-    var s = state.sessions.filter(function (x) { return x.id === ui.sheet.id; })[0];
+    var isNew = ui.sheet.mode === 'new';
+    var s;
+    if (isNew) {
+      var dk = ui.sheet.date || ymd(addDays(new Date(), -1));
+      var ph0 = phaseFor(weekOf(dk));
+      var lastW = lastSession();
+      s = { date: dk, weight: lastW ? lastW.weight : currentWeight(), reps: Array(ph0.sets).fill(ph0.reps), pain: null, morningPain: null, note: '' };
+    } else {
+      s = state.sessions.filter(function (x) { return x.id === ui.sheet.id; })[0];
+    }
     if (!s) { ui.sheet = null; return; }
     var d = parse(s.date);
     var el = document.createElement('div');
     el.id = 'sheet';
     el.className = 'sheet-backdrop';
     el.innerHTML = '<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">' +
-      '<div class="row-between"><h2 id="sheet-title">' + DOW_LONG[d.getDay()] + ' ' + fmtDate(d) + '</h2><button class="round-btn" data-action="close-sheet" aria-label="Close">' + icon('x') + '</button></div>' +
+      '<div class="row-between"><h2 id="sheet-title">' + (isNew ? 'Add past session' : DOW_LONG[d.getDay()] + ' ' + fmtDate(d)) + '</h2><button class="round-btn" data-action="close-sheet" aria-label="Close">' + icon('x') + '</button></div>' +
+      (isNew ? '<div class="field"><label for="e-date">Date</label><input id="e-date" type="date" max="' + todayKey() + '" value="' + s.date + '"></div>' +
+        '<span class="small muted" id="e-phase">Week ' + weekOf(s.date) + ' · ' + phaseFor(weekOf(s.date)).sets + ' × ' + phaseFor(weekOf(s.date)).reps + 'RM</span>' : '') +
       '<div class="field"><label for="e-weight">Weight (kg)</label><input id="e-weight" type="number" inputmode="decimal" step="0.1" min="0" value="' + fmtKg(s.weight) + '"></div>' +
       '<div class="field"><label for="e-reps">Reps per set, separated by commas</label><input id="e-reps" type="text" inputmode="numeric" value="' + s.reps.join(', ') + '"></div>' +
       '<div class="field"><label for="e-pain">Pain after session (0–10)</label><input id="e-pain" type="number" inputmode="numeric" min="0" max="10" value="' + (s.pain == null ? '' : s.pain) + '"></div>' +
       '<div class="field"><label for="e-mpain">Pain next morning (0–10, optional)</label><input id="e-mpain" type="number" inputmode="numeric" min="0" max="10" value="' + (s.morningPain == null ? '' : s.morningPain) + '"></div>' +
       '<div class="field"><label for="e-note">Note</label><input id="e-note" type="text" value="' + esc(s.note) + '"></div>' +
-      '<button class="btn" data-action="save-edit">Save changes</button>' +
-      '<button class="btn ghost" data-action="delete-session" style="color:var(--warn)">Delete session</button></div>';
+      '<button class="btn" data-action="save-edit">' + (isNew ? 'Add session' : 'Save changes') + '</button>' +
+      (isNew ? '' : '<button class="btn ghost" data-action="delete-session" style="color:var(--warn)">Delete session</button>') + '</div>';
     document.body.appendChild(el);
   }
 
@@ -1044,11 +1058,24 @@
       case 'export-json': exportJSON(); break;
       case 'edit-session': ui.sheet = { id: t.getAttribute('data-id') }; renderSheet(); break;
       case 'close-sheet': ui.sheet = null; renderSheet(); break;
+      case 'add-session': ui.sheet = { mode: 'new' }; renderSheet(); break;
       case 'save-edit': {
-        var ss = state.sessions.filter(function (x) { return x.id === ui.sheet.id; })[0];
         var w = parseFloat(document.getElementById('e-weight').value);
         var reps = document.getElementById('e-reps').value.split(/[,;\s]+/).map(function (x) { return parseInt(x, 10); }).filter(function (x) { return !isNaN(x) && x >= 0; });
         if (isNaN(w) || !reps.length) { alert('Check weight and reps.'); return; }
+        var ss;
+        if (ui.sheet.mode === 'new') {
+          var nd = document.getElementById('e-date').value;
+          if (!nd || nd > todayKey()) { alert('Choose a date up to today.'); return; }
+          var nwk = weekOf(nd), nph = phaseFor(nwk);
+          var t0 = parse(nd); t0.setHours(12, 0, 0, 0);
+          var nid = 's' + t0.getTime();
+          while (state.sessions.some(function (x) { return x.id === nid; })) nid += 'b';
+          ss = { id: nid, date: nd, startedAt: t0.getTime(), durationSec: 0, week: nwk, phase: nph.index, targetSets: nph.sets, targetReps: nph.reps, wantsMorning: false, manual: true };
+          state.sessions.push(ss);
+        } else {
+          ss = state.sessions.filter(function (x) { return x.id === ui.sheet.id; })[0];
+        }
         ss.weight = Math.round(w * 10) / 10; ss.reps = reps;
         ss.pain = intOrNull(document.getElementById('e-pain').value);
         ss.morningPain = intOrNull(document.getElementById('e-mpain').value);
@@ -1072,6 +1099,20 @@
   document.addEventListener('change', function (e) {
     var t = e.target;
     if (t.id === 'import-file' && t.files && t.files[0]) { importJSON(t.files[0]); t.value = ''; return; }
+    if (t.id === 'e-date' && t.value) {
+      var ph = phaseFor(weekOf(t.value));
+      var lbl = document.getElementById('e-phase');
+      if (lbl) lbl.textContent = 'Week ' + weekOf(t.value) + ' · ' + ph.sets + ' × ' + ph.reps + 'RM';
+      var r = document.getElementById('e-reps');
+      if (r) r.value = Array(ph.sets).fill(ph.reps).join(', ');
+      return;
+    }
+    if (t.getAttribute && t.getAttribute('data-setting') === 'startDate' && t.value) {
+      state.settings.startDate = t.value;
+      state.sessions.forEach(function (s) { s.week = weekOf(s.date); s.phase = phaseFor(s.week).index; });
+      save();
+      return;
+    }
     var key = t.getAttribute && t.getAttribute('data-setting');
     if (key && t.value) { state.settings[key] = t.value; save(); }
   });
