@@ -822,7 +822,7 @@
     html += '<div class="card"><span class="eyebrow">Backup</span><span class="small muted" style="font-size:13px">Your data is stored only on this phone. Export a backup now and then, for example to Files or iCloud Drive.</span>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="btn small secondary" data-action="export-json">Export</button>' +
       '<label class="btn small secondary" for="import-file" style="cursor:pointer">Import</label><input id="import-file" type="file" accept="application/json,.json" class="sr-only"></div></div>';
-    html += '<p class="small muted" style="text-align:center">Elbow Rehab · v1.2</p>';
+    html += '<p class="small muted" style="text-align:center">Elbow Rehab · v1.2.1</p>';
     return html;
   }
 
@@ -1132,7 +1132,18 @@
   window.addEventListener('hashchange', render);
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
-    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
+        // Check for a new version each time the app comes back to the foreground
+        document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') reg.update().catch(function () {}); });
+      }).catch(function () {});
+      // Reload once when a new version takes over, unless a session is running
+      var hadController = !!navigator.serviceWorker.controller, reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (!hadController || reloaded || route() === 'session') return;
+        reloaded = true; location.reload();
+      });
+    });
   }
 
   // Resume an unfinished session
