@@ -41,6 +41,8 @@
   };
 
   var state = load();
+  // Keep stored week numbers in line with Monday-based weeks
+  if (state.settings.startDate) state.sessions.forEach(function (x) { var w = weekOf(x.date); x.week = w; x.phase = phaseFor(w).index; });
   var ui = { editingWeight: false, sheet: null };
   var tickTimer = null;
   var wakeLock = null;
@@ -84,9 +86,11 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
+  // Program weeks always run Monday to Sunday: week 1 is the week that contains the start date.
+  function programMonday() { return ymd(mondayOf(parse(state.settings.startDate))); }
   function weekOf(key) {
     if (!state.settings.startDate) return 1;
-    var diff = daysBetween(state.settings.startDate, key);
+    var diff = daysBetween(programMonday(), key);
     return Math.max(1, Math.floor(diff / 7) + 1);
   }
   function phaseFor(week) {
@@ -642,11 +646,11 @@
   // Charts: x axis = program day (0..84+), y = value
   function chartFrame(W, H) { return { W: W, H: H, l: 8, r: W - 26, t: 14, b: H - 22 }; }
   function xForDate(key, f, maxDay) {
-    var day = state.settings.startDate ? daysBetween(state.settings.startDate, key) : 0;
+    var day = state.settings.startDate ? daysBetween(programMonday(), key) : 0;
     return f.l + Math.max(0, day) / maxDay * (f.r - f.l);
   }
   function maxDayFor(ss) {
-    var lastDay = state.settings.startDate ? daysBetween(state.settings.startDate, ss[ss.length - 1].date) : 0;
+    var lastDay = state.settings.startDate ? daysBetween(programMonday(), ss[ss.length - 1].date) : 0;
     return Math.max(PROGRAM_WEEKS * 7, lastDay + 3);
   }
   function phaseLines(f, maxDay) {
@@ -742,7 +746,7 @@
         var perWeek = Math.max(1, s.days.length);
         var total = ((p.extra ? week : p.to) - p.from + 1) * perWeek;
         note = 'Current · week ' + week + (p.extra ? '' : ', session ' + Math.min(total, inPhase.length + 1) + ' of ' + total);
-      } else note = p.extra ? 'Optional · continue or taper' : 'Starts ' + DOW[1] + ' ' + fmtDate(addDays(start, (p.from - 1) * 7));
+      } else note = p.extra ? 'Optional · continue or taper' : 'Starts ' + DOW[1] + ' ' + fmtDate(addDays(mondayOf(start), (p.from - 1) * 7));
       html += '<div class="' + cls + '"><div class="phase-dot">' + (st === 'done' ? '✓' : (st === 'now' ? '●' : '')) + '</div>' +
         '<div style="flex-grow:1;display:flex;flex-direction:column;gap:2px"><span class="eyebrow" style="letter-spacing:.8px">' + weeks + '</span><span class="small" style="font-size:13px;font-weight:500;color:' + (st === 'now' ? 'var(--accent)' : 'var(--muted)') + '">' + note + '</span></div>' +
         '<span class="scheme">' + p.sets + ' × ' + p.reps + '</span></div>';
@@ -818,7 +822,7 @@
     html += '<div class="card"><span class="eyebrow">Backup</span><span class="small muted" style="font-size:13px">Your data is stored only on this phone. Export a backup now and then, for example to Files or iCloud Drive.</span>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="btn small secondary" data-action="export-json">Export</button>' +
       '<label class="btn small secondary" for="import-file" style="cursor:pointer">Import</label><input id="import-file" type="file" accept="application/json,.json" class="sr-only"></div></div>';
-    html += '<p class="small muted" style="text-align:center">Elbow Rehab · v1.1</p>';
+    html += '<p class="small muted" style="text-align:center">Elbow Rehab · v1.2</p>';
     return html;
   }
 
@@ -924,8 +928,9 @@
     }
     PHASES.forEach(function (p, i) {
       if (p.extra) return;
-      var ps = addDays(start, (p.from - 1) * 7);
-      var pe = addDays(start, p.to * 7 - 1);
+      var ps = addDays(mondayOf(start), (p.from - 1) * 7);
+      if (ps < start) ps = start;
+      var pe = addDays(mondayOf(start), p.to * 7 - 1);
       if (ymd(pe) < todayKey()) return;
       // first matching day on/after phase start
       var first = ps;
